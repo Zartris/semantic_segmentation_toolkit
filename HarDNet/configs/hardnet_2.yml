@@ -1,0 +1,53 @@
+model:
+    arch: hardnet
+data:
+    dataset: harbour_2
+    train_split: train
+    val_split: val
+    img_rows: 360
+    img_cols: 640
+    channels: 3
+    path: F:/code/data/HarbourData/final/images_sorted
+    sbd_path: F:/code/data/HarbourData/final/images_sorted
+training:
+    train_iters: 90000
+    batch_size: 16
+    val_interval: 250
+    log_splitter_inverval: 10000
+    n_workers: 1
+    use_fp16: True
+    print_interval: 10
+    augmentations:
+        hflip: 0.5
+        vflip: 0.5
+        sp_noise: 0.002
+        gaussian_noise: [0,7]
+        swap_channels: 0.5
+        rscale_crop: [ 288, 512 ]
+        color_jitter: { brightness:0.4, contrast:0.4, saturation:0.4, color_drop:0.1 }
+    optimizer:
+        name: 'sgd'
+        lr: 0.02
+#        weight_decay: 0.0005
+        weight_decay: 0.0005
+        momentum: 0.9
+    loss:
+#        name: 'bootstrapped_cross_entropy'
+#        min_K: 4096
+#        loss_th: 0.3
+#        size_average: True
+        name: 'BootstrappedCrossEntropy'
+        end_k_percentage: 0.20
+        loss_th: 0.3
+        start_warm: 1000
+        end_warm: 3000
+    lr_schedule:
+        name: 'poly_lr'
+        power: 0.9
+        warmup_iter: 6000
+        warmup_ratio: 0.1
+        warmup_mode: exp
+    resume: 'F:/code/python/Hardnet/FCHarDNet/runs/harbour_2/cur/hardnet_harbour_checkpoint.pkl'
+    finetune: None
+validate:
+    model_path: 'F:/code/python/Hardnet/FCHarDNet/runs/harbour_2/cur/hardnet_harbour_best_model.pkl'

@@ -1,0 +1,41 @@
+model:
+    arch: hardnet
+data:
+    dataset: dryharbour
+    train_split: train
+    val_split: val
+    img_rows: 144
+    img_cols: 256
+    channels: 3
+    path: 'C:\\Users\\Jonas le Fevre\\Documents\\AirSim\\Dry_small\\combined\\seg_dataset\\images_sorted'
+    sbd_path: 'C:\\Users\\Jonas le Fevre\\Documents\\AirSim\\Dry_small\\combined\\seg_dataset\\images_sorted'
+training:
+    train_iters: 90000
+    batch_size: 4
+    val_interval: 500
+    n_workers: 1
+    use_fp16: True
+    print_interval: 10
+    augmentations:
+        hflip: 0.5
+        sp_noise: 0.0002
+        gaussian_noise: [ 0, 7 ]
+        swap_channels: 0.5
+    optimizer:
+        name: 'sgd'
+        lr: 0.02
+        #        weight_decay: 0.0005
+        weight_decay: 0.001
+        momentum: 0.9
+    loss:
+        name: 'BootstrappedCrossEntropy'
+        min_K: 4096
+        loss_th: 0.3
+        size_average: True
+    lr_schedule:
+        name: 'poly_lr'
+        max_iter: 5000
+    resume: 'G:/code/python/Hardnet/FCHarDNet/runs/hardnet_dryharbour/cur/hardnet_dryharbour_checkpoint.pkl'
+    finetune: None
+validate:
+    model_path: 'G:/code/python/Hardnet/FCHarDNet/runs/hardnet_dryharbour/cur/hardnet_dryharbour_best_model.pkl'
