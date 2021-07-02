@@ -1,0 +1,55 @@
+model:
+  arch: bisenetv2
+  output_aux: False
+data:
+  dataset: harbour
+  train_split: train
+  val_split: val
+  test_split: test
+  img_rows: 288
+  img_cols: 512
+  channels: 3
+  path: 'F:/code/data/HarbourData/final/images_sorted'
+  sbd_path: 'F:/code/data/HarbourData/final/images_sorted'
+training:
+  train_iters: 90000
+  batch_size: 8
+  val_interval: 250
+  log_splitter_inverval: 10000
+  n_workers: 1
+  use_fp16: True
+  print_interval: 10
+  num_aux_heads: 4
+  augmentations:
+    hflip: 0.5
+    vflip: 0.5
+    swap_channels: 0.2
+    rscale_crop: [ 288, 512 ]
+    color_jitter: { brightness:0.4, contrast:0.4, saturation:0.4, color_drop:0.1 }
+  optimizer:
+    name: 'sgd'
+    lr: 0.01
+    weight_decay: 0.0005
+    momentum: 0.9
+  loss:
+    #        name: 'DiceLoss'
+    #        eps: 0.0000001
+    #        name: 'adam'
+    #        lr: 0.02
+    #        weight_decay: 0.0005
+    name: 'BootstrappedCrossEntropy'
+    end_k_percentage: 0.20
+    loss_th: 0.3
+    start_warm: 1000
+    end_warm: 9000
+    weight: [1.]
+  lr_schedule:
+    name: 'poly_lr'
+    power: 0.9
+    warmup_iter: 2000
+    warmup_ratio: 0.1
+    warmup_mode: exp
+  resume: 'F:\code\python\Hardnet\BiSeNet\runs\BiSeNetv2\cur\bisenetv2_harbour_checkpoint.pkl'
+  finetune: None
+validate:
+  model_path: 'F:\\code\\python\\Hardnet\\BiSeNet\\runs\\BiSeNetv2\\cur\\bisenetv2_harbour_best_model.pkl'

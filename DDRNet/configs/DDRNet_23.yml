@@ -1,0 +1,58 @@
+model:
+  arch: DDRNet_23
+  block: "basicblock"
+  layers: [2, 2, 2, 2]
+  planes: 64
+  spp_planes: 128
+  head_planes: 128
+  augment: True # If this is true you have to have weights in the loss function
+data:
+  dataset: harbour
+  train_split: train
+  val_split: val
+  img_rows: 360
+  img_cols: 640
+  channels: 3
+  path: F:/code/data/HarbourData/final/images_sorted
+  sbd_path: F:/code/data/HarbourData/final/images_sorted
+training:
+  train_iters: 90000
+  batch_size: 8
+  val_interval: 250
+  log_splitter_inverval: 10000
+  n_workers: 1
+  use_fp16: True
+  print_interval: 10
+  augmentations:
+    hflip: 0.5
+    vflip: 0.5
+    swap_channels: 0.2
+    rscale_crop: [ 360, 640 ]
+    color_jitter: { brightness:0.4, contrast:0.4, saturation:0.4, color_drop:0.1 }
+  optimizer:
+    name: 'sgd'
+    lr: 0.01
+    #        weight_decay: 0.0005
+    weight_decay: 0.0005
+    momentum: 0.9
+  loss:
+    #        name: 'bootstrapped_cross_entropy'
+    #        min_K: 4096
+    #        loss_th: 0.3
+    #        size_average: True
+    name: 'BootstrappedCrossEntropy'
+    end_k_percentage: 0.20
+    loss_th: 0.3
+    start_warm: 1000
+    end_warm: 9000
+    weight: [1, 0.4]
+  lr_schedule:
+    name: 'poly_lr'
+    power: 0.9
+    warmup_iter: 6000
+    warmup_ratio: 0.1
+    warmup_mode: exp
+  resume: 'F:/code/python/Hardnet/DDRNet/runs/DDRNet_23/cur/DDRNet_harbour_checkpoint.pkl'
+  finetune: None
+validate:
+  model_path: 'F:/code/python/Hardnet/DDRNet/runs/DDRNet_23/cur/DDRNet_harbour_best_model.pkl'

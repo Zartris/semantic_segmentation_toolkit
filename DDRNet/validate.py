@@ -1,0 +1,284 @@
+import argparse
+import os
+import time
+import timeit
+from pathlib import Path
+
+import cv2
+import numpy as np
+import scipy.misc as misc
+import torch
+import torch.nn as nn
+import yaml
+from torch.utils import data
+
+from models import get_model
+from ptsemseg.loader import get_loader
+from ptsemseg.metrics.metrics import runningScore
+from ptsemseg.utils import convert_state_dict
+from ptsemseg.bn_fusion import fuse_bn_recursively
+
+torch.backends.cudnn.benchmark = True
+from matplotlib import pyplot as plt
+
+
+def weights_init(m):
+    if isinstance(m, nn.Conv2d):
+        nn.init.xavier_normal_(m.weight)
+
+
+def reset_batchnorm(m):
+    if isinstance(m, torch.nn.BatchNorm2d):
+        m.reset_running_stats()
+        m.momentum = None
+
+
+def validate(cfg, args):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # Setup Dataloader
+    data_loader = get_loader(cfg["data"]["dataset"])
+    data_path = cfg["data"]["path"]
+
+    loader = data_loader(
+        data_path,
+        split=cfg["data"]["val_split"],
+        is_transform=True,
+        img_size=(cfg['data']['img_rows'], cfg['data']['img_cols']),
+    )
+
+    n_classes = loader.n_classes
+
+    valloader = data.DataLoader(loader, batch_size=1, num_workers=1)
+    running_metrics = runningScore(n_classes)
+
+    # Setup Model
+    model = get_model(cfg["model"], n_classes).to(device)
+    model = torch.nn.DataParallel(model, device_ids=range(torch.cuda.device_count()))
+
+    # pretrained_path = 'weights/hardnet_petite_base.pth'
+    # weights = torch.load(pretrained_path)
+    # model.module.base.load_state_dict(weights)
+    if cfg["validate"]["model_path"] is not None:
+        if os.path.isfile(cfg["validate"]["model_path"]):
+            print(
+                "Loading model and optimizer from checkpoint '{}'".format(cfg["validate"]["model_path"])
+            )
+            checkpoint = torch.load(cfg["validate"]["model_path"])
+            model.load_state_dict(checkpoint["model_state"])
+            print(
+                "Loaded checkpoint '{}' (iter {})".format(
+                    cfg["validate"]["model_path"], checkpoint["epoch"]
+                )
+            )
+        else:
+            print("No checkpoint found at '{}'".format(cfg["validate"]["model_path"]))
+            state = convert_state_dict(torch.load(args.model_path)["model_state"])
+            model.load_state_dict(state)
+
+    if args.bn_fusion:
+        model = fuse_bn_recursively(model)
+
+    # Transform model into v2. Please set trt=True when converting to TensorRT model
+    # model.v2_transform(trt=False)
+    print(model)
+
+    if args.update_bn:
+        print("Reset BatchNorm and recalculate mean/var")
+        model.apply(reset_batchnorm)
+        model.train()
+    else:
+        model.eval()
+
+    model.to(device)
+    total_time = 0
+
+    total_params = sum(p.numel() for p in model.parameters())
+    print('Parameters: ', total_params)
+
+    # stat(model, (3, 1024, 2048))
+    torch.backends.cudnn.benchmark = True
+
+    for i, (images, labels, fname) in enumerate(valloader):
+        start_time = timeit.default_timer()
+
+        images = images.to(device)
+
+        if i == 0:
+            with torch.no_grad():
+                outputs = model(images)
+
+        if args.eval_flip:
+            outputs = model(images)
+
+            # Flip images in numpy (not support in tensor)
+            outputs = outputs.data.cpu().numpy()
+            flipped_images = np.copy(images.data.cpu().numpy()[:, :, :, ::-1])
+            flipped_images = torch.from_numpy(flipped_images).float().to(device)
+            outputs_flipped = model(flipped_images)
+            outputs_flipped = outputs_flipped.data.cpu().numpy()
+            outputs = (outputs + outputs_flipped[:, :, :, ::-1]) / 2.0
+
+            pred = np.argmax(outputs, axis=1)
+        else:
+            # torch.cuda.synchronize()
+            start_time = time.perf_counter()
+
+            with torch.no_grad():
+                outputs = model(images)[0]
+
+            # torch.cuda.synchronize()
+            elapsed_time = time.perf_counter() - start_time
+
+            if args.save_image:
+                pred = torch.squeeze(outputs, dim=0)
+                probs = torch.argmax(pred, dim=0)
+                save_rgb = True
+
+                # decoded_id = loader.decode_segmap_id(pred)
+                decoded = loader.decode_segmap(probs.cpu().numpy())
+                cur_dir = os.getcwd()
+                dir = Path(cur_dir, "pic", 'out_predID')
+                if not dir.exists():
+                    dir.mkdir(parents=True)
+                plt.imsave(str(Path(dir, fname[0])), decoded)
+
+                if save_rgb:
+                    decoded = loader.decode_segmap(probs.cpu().numpy())
+                    img_input = np.squeeze(images.cpu().numpy(), axis=0)
+                    img_input = img_input.transpose(1, 2, 0)
+                    h, w = img_input.shape[:2]
+                    decoded = cv2.resize(decoded, (w, h), interpolation=cv2.INTER_NEAREST)
+                    blend = img_input * 0.2 + decoded * 0.8
+                    fname_new = fname[0]
+                    fname_new = fname_new[:-4]
+                    fname_new += '.jpg'
+                    dir = Path(cur_dir, "pic", 'out_rgb')
+                    if not dir.exists():
+                        dir.mkdir(parents=True)
+                    plt.imsave(str(Path(dir, fname_new)), blend)
+
+            pred = torch.squeeze(outputs, dim=0)
+            pred = torch.argmax(pred, dim=0).cpu().numpy()
+
+        gt = np.squeeze(labels.numpy(), axis=0)
+        pred = cv2.resize(pred, (w, h), interpolation=cv2.INTER_NEAREST)
+        s = np.sum(gt == pred) / (cfg['data']['img_rows'] * cfg['data']['img_cols'])
+
+        if args.measure_time:
+            total_time += elapsed_time
+            print(
+                "Inference time \
+                  (iter {0:5d}): {1:4f}, {2:3.5f} fps".format(
+                    i + 1, s, 1 / elapsed_time
+                )
+            )
+
+        running_metrics.update(gt, pred)
+
+    score, class_iou = running_metrics.get_scores()
+    print("Total Frame Rate = %.2f fps" % (len(loader) / total_time))
+
+    if args.update_bn:
+        model = torch.nn.DataParallel(model, device_ids=range(torch.cuda.device_count()))
+        state2 = {"model_state": model.state_dict()}
+        torch.save(state2, 'hardnet_cityscapes_mod.pth')
+
+    for k, v in score.items():
+        print(k, v)
+
+    for i in range(n_classes):
+        print(i, class_iou[i])
+
+    categories = {
+        "sky": (108, 91, 207),
+        "dock_side": (173, 141, 224),
+        "floor": (221, 250, 244),
+        "ship": (114, 119, 232),
+        "unknown": (128, 219, 130),
+    }
+    index_to_category_name = ["Sky", "Harbor wall", "Floor", "Ship", "Unknown"]
+    running_metrics.plot_conf_matrix("??", index_to_category_name, percentage=True,
+                                     plot_tile_suffix=" " + str(score["Mean IoU : \t"]),
+                                     save_image="F:\\code\\python\\Hardnet\\BiSeNet\\runs\\BiSeNetv2\\cur\\")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Hyperparams")
+    parser.add_argument(
+        "--config",
+        nargs="?",
+        type=str,
+        default="configs/DDRNet_23_slim.yml",
+        help="Config file to be used",
+    )
+    parser.add_argument(
+        "--model_path",
+        nargs="?",
+        type=str,
+        default="",
+        help="Path to the saved model",
+    )
+    parser.add_argument(
+        "--eval_flip",
+        dest="eval_flip",
+        action="store_true",
+        help="Enable evaluation with flipped image |\
+                              False by default",
+    )
+    parser.add_argument(
+        "--no-eval_flip",
+        dest="eval_flip",
+        action="store_false",
+        help="Disable evaluation with flipped image",
+    )
+    parser.set_defaults(eval_flip=False)
+
+    parser.add_argument(
+        "--measure_time",
+        dest="measure_time",
+        action="store_true",
+        help="Enable evaluation with time (fps) measurement |\
+                              True by default",
+    )
+    parser.add_argument(
+        "--no-measure_time",
+        dest="measure_time",
+        action="store_false",
+        help="Disable evaluation with time (fps) measurement",
+    )
+    parser.set_defaults(measure_time=True)
+
+    parser.add_argument(
+        "--save_image",
+        dest="save_image",
+        action="store_true",
+        help="Enable saving inference result image into out_img/ |\
+                              False by default",
+    )
+    parser.set_defaults(save_image=True)
+
+    parser.add_argument(
+        "--update_bn",
+        dest="update_bn",
+        action="store_true",
+        help="Reset and update BatchNorm running mean/var with entire dataset |\
+              False by default",
+    )
+    parser.set_defaults(update_bn=False)
+
+    parser.add_argument(
+        "--no-bn_fusion",
+        dest="bn_fusion",
+        action="store_false",
+        help="Disable performing batch norm fusion with convolutional layers |\
+              bn_fusion is enabled by default",
+    )
+    parser.set_defaults(bn_fusion=False)
+
+    args = parser.parse_args()
+
+    with open(args.config) as fp:
+        cfg = yaml.load(fp)
+
+    validate(cfg, args)

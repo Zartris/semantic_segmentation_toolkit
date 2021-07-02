@@ -1,0 +1,43 @@
+model:
+    arch: bisenetv1
+    output_aux: True
+data:
+    dataset: dryharbour
+    train_split: train
+    val_split: val
+    img_rows: 288
+    img_cols: 512
+    channels: 3
+    path: 'C:\\Users\\Jonas le Fevre\\Documents\\AirSim\\Dry_small\\combined\\seg_dataset\\images_sorted'
+    sbd_path: 'C:\\Users\\Jonas le Fevre\\Documents\\AirSim\\Dry_small\\combined\\seg_dataset\\images_sorted'
+training:
+    train_iters: 90000
+    batch_size: 10
+    val_interval: 250
+    n_workers: 1
+    print_interval: 10
+    use_fp16: True
+    num_aux_heads: 4
+    augmentations:
+        hflip: 0.5
+        gaussian_noise: [ 0,7 ]
+        color_jitter: {brightness:0.4, contrast:0.4, saturation:0.4}
+    optimizer:
+        name: 'adam'
+        lr: 0.02
+        weight_decay: 0.0005
+#        name: 'sgd'
+#        lr: 0.02
+#        #        weight_decay: 0.0005
+#        weight_decay: 0.0005
+#        momentum: 0.9
+    loss:
+        name: 'DiceLoss'
+        eps: 0.0000001
+    lr_schedule:
+        name: 'poly_lr'
+        max_iter: 5000
+    resume: 'G:\code\python\Hardnet\BiSeNet\runs\BiSeNetv2\cur\bisenetv2_dryharbour_checkpoint.pkl'
+    finetune: None
+validate:
+    model_path: 'G:\code\python\Hardnet\BiSeNet\runs\BiSeNetv2\cur\bisenetv2_dryharbour_best_model.pkl'
