@@ -1,1 +1,1 @@
-# semantic_segmentation_toolkit
+# Semantic Segmentation Toolkit
