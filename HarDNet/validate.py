@@ -188,7 +188,7 @@ def validate(cfg, args):
     index_to_category_name = ["Unknown", "Water", "Ship"]
     running_metrics.plot_conf_matrix("??", index_to_category_name, percentage=True,
                                      plot_tile_suffix=" " + str(score["Mean IoU : \t"]),
-                                     save_image="F:\\code\\python\\Hardnet\\FCHarDNet\\runs\\hardnet\\cur\\test\\")
+                                     save_image="F:\\code\\python\\semantic_segmentation_toolkit\\HarDNet\\runs\\hardnet\\cur\\test\\")
 
 
 if __name__ == "__main__":

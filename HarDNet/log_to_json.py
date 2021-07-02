@@ -63,5 +63,5 @@ def convert_tensorboard_log_to_json(log_dir_path: Path):
 
 
 if __name__ == '__main__':
-    log_folder = Path("/FCHarDNet/runs/hardnet/cur")
+    log_folder = Path("/HarDNet/runs/hardnet/cur")
     convert_tensorboard_log_to_json(log_folder)

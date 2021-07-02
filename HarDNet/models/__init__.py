@@ -1,6 +1,6 @@
 import copy
 
-from FCHarDNet.models.hardnet import hardnet
+from HarDNet.models.hardnet import hardnet
 
 
 def get_model(model_dict, n_classes, version=None):

@@ -47,7 +47,7 @@ training:
         warmup_iter: 2000
         warmup_ratio: 0.1
         warmup_mode: exp
-    resume: 'F:/code/python/Hardnet/FCHarDNet/runs/hardnet/cur/hardnet_harbour_checkpoint.pkl'
+    resume: 'F:/code/python/semantic_segmentation_toolkit/HarDNet/runs/hardnet/cur/hardnet_harbour_checkpoint.pkl'
     finetune: None
 validate:
-    model_path: 'F:/code/python/Hardnet/FCHarDNet/runs/hardnet/cur/hardnet_harbour_best_model.pkl'
+    model_path: 'F:/code/python/semantic_segmentation_toolkit/HarDNet/runs/hardnet/cur/hardnet_harbour_best_model.pkl'

@@ -35,7 +35,7 @@ training:
     lr_schedule:
         name: 'poly_lr'
         max_iter: 5000
-    resume: 'G:/code/python/Hardnet/FCHarDNet/runs/hardnet_dryharbour/cur/hardnet_dryharbour_checkpoint.pkl'
+    resume: 'G:/code/python/semantic_segmentation_toolkit/HarDNet/runs/hardnet_dryharbour/cur/hardnet_dryharbour_checkpoint.pkl'
     finetune: None
 validate:
-    model_path: 'G:/code/python/Hardnet/FCHarDNet/runs/hardnet_dryharbour/cur/hardnet_dryharbour_best_model.pkl'
+    model_path: 'G:/code/python/semantic_segmentation_toolkit/HarDNet/runs/hardnet_dryharbour/cur/hardnet_dryharbour_best_model.pkl'
